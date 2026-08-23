@@ -57,6 +57,7 @@ router.post("/register", async (req, res) => {
 
 // LOGIN
 router.post("/login", async (req, res) => {
+    console.log("🔵 Login route hit", new Date().toISOString());
     try {
         const { email, password } = req.body;
 
@@ -81,10 +82,7 @@ router.post("/login", async (req, res) => {
         const user = result.rows[0];
 
         // Compare password
-        const passwordMatch = await bcrypt.compare(
-            password,
-            user.password_hash
-        );
+        const passwordMatch = await bcrypt.compare(password, user.password_hash);
 
         if (!passwordMatch) {
             return res.status(401).json({
