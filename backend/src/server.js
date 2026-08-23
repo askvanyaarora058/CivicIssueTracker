@@ -10,15 +10,30 @@ const authenticateToken = require("./middleware/authMiddleware");
 const app = express();
 
 // CORS
-const corsOptions = {
-    origin: "https://civicissuetracker.onrender.com",
+const allowedOrigins = [
+    "https://civicissuetracker.onrender.com",
+    "http://localhost:5173"
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (curl, Postman, etc.)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false,
     optionsSuccessStatus: 204
-};
-
-app.use(cors(corsOptions));
-
+}));
+app.use(express.json());
 
 
 // Test route
