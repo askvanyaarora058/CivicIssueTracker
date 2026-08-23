@@ -10,14 +10,16 @@ const authenticateToken = require("./middleware/authMiddleware");
 const app = express();
 
 // CORS
-app.use(cors({
+const corsOptions = {
     origin: "https://civicissuetracker.onrender.com",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     optionsSuccessStatus: 204
-}));
+};
 
-app.use(express.json());
+app.use(cors(corsOptions));
+
+app.options("*", cors(corsOptions));
 
 // Test route
 app.get("/", (req, res) => {
