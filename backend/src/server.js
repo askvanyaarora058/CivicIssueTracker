@@ -33,6 +33,14 @@ app.get("/api/health", (req, res) => {
         message: "Server is healthy"
     });
 });
+app.post("/api/test-post", (req, res) => {
+    console.log("🟢 TEST POST RECEIVED");
+
+    res.json({
+        success: true,
+        message: "POST request reached backend"
+    });
+});
 app.get("/api/db-test", async (req, res) => {
     try {
         const result = await pool.query("SELECT NOW()");
