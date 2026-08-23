@@ -19,7 +19,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-//app.options("*", cors(corsOptions));
+
 
 // Test route
 app.get("/", (req, res) => {
