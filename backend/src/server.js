@@ -1,3 +1,4 @@
+const pool = require("./db");
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -31,6 +32,25 @@ app.get("/api/health", (req, res) => {
         status: "OK",
         message: "Server is healthy"
     });
+});
+app.get("/api/db-test", async (req, res) => {
+    try {
+        const result = await pool.query("SELECT NOW()");
+
+        res.json({
+            status: "OK",
+            database: "connected",
+            time: result.rows[0].now
+        });
+    } catch (error) {
+        console.error("❌ DB TEST ERROR:", error.message);
+
+        res.status(500).json({
+            status: "ERROR",
+            database: "not connected",
+            error: error.message
+        });
+    }
 });
 
 // Protected test route
