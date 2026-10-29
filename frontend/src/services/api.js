@@ -1,12 +1,8 @@
-// Central API utility for talking to the existing Express/Postgres backend.
-// Every request goes through here so headers, error handling and JSON
-// parsing stay consistent across the app. No mock data — every function
-// hits a real endpoint from the backend spec.
+
+ // Central API utility for the Civic Tracker backend.
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
-// Thrown for any non-2xx response. Carries the HTTP status so callers
-// (and the AuthContext) can special-case 401 / 403.
 export class ApiError extends Error {
   constructor(message, status, data) {
     super(message)
@@ -24,7 +20,10 @@ function getToken() {
   }
 }
 
-async function request(path, { method = 'GET', body, auth = false, headers = {} } = {}) {
+async function request(
+  path,
+  { method = 'GET', body, auth = false, headers = {} } = {}
+) {
   const finalHeaders = { ...headers }
   let finalBody = body
 
@@ -35,17 +34,20 @@ async function request(path, { method = 'GET', body, auth = false, headers = {} 
 
   if (auth) {
     const token = getToken()
-    if (token) finalHeaders['Authorization'] = `Bearer ${token}`
+    if (token) {
+      finalHeaders['Authorization'] = `Bearer ${token}`
+    }
   }
 
   let response
+
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method,
       headers: finalHeaders,
       body: finalBody,
     })
-  } catch (networkErr) {
+  } catch {
     throw new ApiError(
       'Could not reach the server. Check that the backend is running at ' + BASE_URL,
       0,
@@ -55,14 +57,28 @@ async function request(path, { method = 'GET', body, auth = false, headers = {} 
 
   let data = null
   const contentType = response.headers.get('content-type') || ''
+
   if (contentType.includes('application/json')) {
     data = await response.json().catch(() => null)
+  }
+
+  // IMPORTANT:
+  // A missing or invalid OTP can intentionally return HTTP 401.
+  // Pass the MFA-required response to Login.jsx so it can display
+  // the OTP input. This response must never contain a login token.
+  if (
+    path === '/api/auth/login' &&
+    data?.mfaRequired === true &&
+    !data?.token
+  ) {
+    return data
   }
 
   if (!response.ok) {
     const message =
       (data && (data.message || data.error)) ||
       defaultMessageForStatus(response.status)
+
     throw new ApiError(message, response.status, data)
   }
 
@@ -95,10 +111,14 @@ export function registerUser({ name, email, password }) {
   })
 }
 
-export function loginUser({ email, password }) {
+export function loginUser({ email, password, otp }) {
   return request('/api/auth/login', {
     method: 'POST',
-    body: { email, password },
+    body: {
+      email,
+      password,
+      ...(otp ? { otp } : {}),
+    },
   })
 }
 
@@ -106,9 +126,19 @@ export function loginUser({ email, password }) {
 
 export function getIssues(params = {}) {
   const query = new URLSearchParams()
-  if (params.status && params.status !== 'All') query.set('status', params.status)
-  if (params.category && params.category !== 'All') query.set('category', params.category)
-  if (params.search) query.set('search', params.search)
+
+  if (params.status && params.status !== 'All') {
+    query.set('status', params.status)
+  }
+
+  if (params.category && params.category !== 'All') {
+    query.set('category', params.category)
+  }
+
+  if (params.search) {
+    query.set('search', params.search)
+  }
+
   const qs = query.toString()
   return request(`/api/issues${qs ? `?${qs}` : ''}`)
 }
@@ -144,4 +174,21 @@ export function deleteIssue(id) {
 
 export function checkHealth() {
   return request('/api/health')
+}
+
+/* ---------------- MFA ---------------- */
+
+export function setupMfa() {
+  return request('/api/auth/mfa/setup', {
+    method: 'POST',
+    auth: true,
+  })
+}
+
+export function verifyMfaSetup(token) {
+  return request('/api/auth/mfa/verify-setup', {
+    method: 'POST',
+    body: { token },
+    auth: true,
+  })
 }

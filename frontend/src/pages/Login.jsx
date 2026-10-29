@@ -1,99 +1,169 @@
+
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useToast } from '../components/Toast.jsx'
-import { ApiError } from '../services/api.js'
 
 export default function Login() {
   const { login } = useAuth()
-  const toast = useToast()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [form, setForm] = useState({ email: '', password: '' })
-  const [errors, setErrors] = useState({})
-  const [submitError, setSubmitError] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [otp, setOtp] = useState('')
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function validate() {
-    const next = {}
-    if (!form.email.trim()) next.email = 'Email is required.'
-    else if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'Enter a valid email address.'
-    if (!form.password) next.password = 'Password is required.'
-    setErrors(next)
-    return Object.keys(next).length === 0
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setSubmitError('')
-    if (!validate()) return
-
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
     setLoading(true)
+
     try {
-      const user = await login(form.email, form.password)
-      toast.success(`Welcome back, ${user.name}.`)
-      const redirectTo = location.state?.from?.pathname || (user.role === 'admin' ? '/admin' : '/dashboard')
-      navigate(redirectTo, { replace: true })
-    } catch (err) {
-      if (err instanceof ApiError && (err.status === 400 || err.status === 401)) {
-        setSubmitError('Incorrect email or password.')
-      } else if (err instanceof ApiError) {
-        setSubmitError(err.message)
-      } else {
-        setSubmitError('Something went wrong. Please try again.')
+      const result = await login(
+        email.trim(),
+        password,
+        mfaRequired ? otp : undefined
+      )
+
+      // The backend requires an authenticator code.
+      // Do not navigate or create a session at this point.
+      if (result?.mfaRequired) {
+        setMfaRequired(true)
+        setOtp('')
+        setError(result.message || 'Enter your six-digit authenticator code.')
+        return
       }
+
+      if (!result?.id || !result?.role) {
+        setError('Login failed. Please try again.')
+        return
+      }
+
+      const destination =
+        location.state?.from?.pathname ||
+        (result.role === 'admin' ? '/admin' : '/dashboard')
+
+      navigate(destination, { replace: true })
+    } catch (err) {
+      setError(err.message || 'Login failed. Check your email and password.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="auth-page">
-      <div className="surface auth-card">
-        <h2>Log in</h2>
-        <p className="auth-sub">Access your dashboard and reported issues.</p>
+    <section
+      className="section"
+      style={{ maxWidth: 520, width: '100%', margin: '0 auto' }}
+    >
+      <h1>Log in</h1>
 
-        {submitError && (
-          <div className="field-error" style={{ marginBottom: 16 }}>{submitError}</div>
+      <p>
+        {mfaRequired
+          ? 'Enter the six-digit code from your authenticator app.'
+          : 'Log in to your Civic Tracker account.'}
+      </p>
+
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: 18 }}>
+          <label htmlFor="email">Email address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            disabled={loading || mfaRequired}
+            style={{
+              display: 'block',
+              boxSizing: 'border-box',
+              width: '100%',
+              padding: 12,
+              marginTop: 8
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            disabled={loading || mfaRequired}
+            style={{
+              display: 'block',
+              boxSizing: 'border-box',
+              width: '100%',
+              padding: 12,
+              marginTop: 8
+            }}
+          />
+        </div>
+
+        {/* Always render the OTP input once MFA is required. */}
+        {mfaRequired && (
+          <div style={{ marginBottom: 18 }}>
+            <label htmlFor="otp">Six-digit authenticator code</label>
+            <input
+              id="otp"
+              name="otp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="Enter 6-digit code"
+              value={otp}
+              onChange={(event) => {
+                setOtp(
+                  event.target.value.replace(/\D/g, '').slice(0, 6)
+                )
+              }}
+              required
+              autoFocus
+              style={{
+                display: 'block',
+                boxSizing: 'border-box',
+                width: '100%',
+                padding: 12,
+                marginTop: 8
+              }}
+            />
+          </div>
         )}
 
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="field">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={form.email}
-              className={errors.email ? 'invalid' : ''}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              autoComplete="email"
-            />
-            {errors.email && <div className="field-error">{errors.email}</div>}
-          </div>
+        {error && (
+          <p role="alert" style={{ color: 'red', marginBottom: 16 }}>
+            {error}
+          </p>
+        )}
 
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={form.password}
-              className={errors.password ? 'invalid' : ''}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              autoComplete="current-password"
-            />
-            {errors.password && <div className="field-error">{errors.password}</div>}
-          </div>
+        <button
+          type="submit"
+          disabled={loading || (mfaRequired && otp.length !== 6)}
+        >
+          {loading
+            ? 'Please wait...'
+            : mfaRequired
+              ? 'Verify code and log in'
+              : 'Log in'}
+        </button>
+      </form>
 
-          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-            {loading ? <span className="spinner" /> : 'Log in'}
-          </button>
-        </form>
-
-        <div className="auth-switch">
-          Don't have an account? <Link to="/register">Create one</Link>
-        </div>
-      </div>
-    </div>
+      {!mfaRequired && (
+        <p style={{ marginTop: 18 }}>
+          Don't have an account? <Link to="/register">Register</Link>
+        </p>
+      )}
+    </section>
   )
 }

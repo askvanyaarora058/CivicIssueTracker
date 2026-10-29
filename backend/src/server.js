@@ -47,7 +47,8 @@ app.get("/", (req, res) => {
 app.get("/api/health", (req, res) => {
     res.json({
         status: "OK",
-        message: "Server is healthy"
+        message: "Server is healthy",
+        instance: process.env.INSTANCE_ID || "local"
     });
 });
 app.post("/api/test-post", (req, res) => {
